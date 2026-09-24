@@ -1,0 +1,10 @@
+pandas
+requests
+pyarrow
+geopandas
+statsmodels
+esda
+libpysal
+matplotlib
+pytest
+boto3
