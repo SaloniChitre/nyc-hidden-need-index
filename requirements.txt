@@ -8,4 +8,4 @@ libpysal
 matplotlib
 pytest
 boto3
-openpyxl
+openpyxlopenpyxl
