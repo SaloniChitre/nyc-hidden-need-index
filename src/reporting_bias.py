@@ -140,7 +140,7 @@ def plot(data: pd.DataFrame, stats: dict, path: Path) -> None:
     silent = data[data["silent"]]
     ax.scatter(normal[NEED_COL], normal[RATE_COL], s=45, color="#1B998B",
                alpha=0.75, label="Other districts")
-    ax.scatter(silent[NEED_COL], silent[RATE_COL], s=90, color="#F46036",
+    ax.scatter(silent[NEED_COL], silent[RATE_COL], s=160, color="#F46036",
                edgecolor="black", label="Silent Neighborhoods")
 
     line = data.sort_values(NEED_COL)
@@ -148,17 +148,25 @@ def plot(data: pd.DataFrame, stats: dict, path: Path) -> None:
             label="Expected complaints")
     ax.axvline(data.attrs["median_need"], color="grey", ls=":", lw=1)
 
-    # alternate labels below/above the dot so neighbors don't overlap
-    for i, (_, r) in enumerate(silent.sort_values(NEED_COL).iterrows()):
-        dy = -14 if i % 2 == 0 else 10
-        ax.annotate(r["district_name"], (r[NEED_COL], r[RATE_COL]),
-                    xytext=(7, dy), textcoords="offset points", fontsize=9)
+    # Many silent districts sit close together, so number the dots and list
+    # the names (with their silence gap) in a box instead of labelling each dot
+    ranked = silent.sort_values("reporting_ratio").reset_index(drop=True)
+    lines = []
+    for i, r in ranked.iterrows():
+        ax.annotate(str(i + 1), (r[NEED_COL], r[RATE_COL]), ha="center",
+                    va="center", fontsize=7, fontweight="bold", color="white")
+        lines.append(f"{i + 1}  {r['district_name']}  "
+                     f"(-{(1 - r['reporting_ratio']) * 100:.0f}%)")
+    if lines:
+        ax.text(0.02, 0.97, "Complaints vs. expected:\n" + "\n".join(lines),
+                transform=ax.transAxes, fontsize=9, va="top",
+                bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#F46036"))
 
     ax.set_xlabel("% of renter homes with housing defects (survey, 2023)")
     ax.set_ylabel("311 housing complaints per 1,000 renter homes (2023)")
     ax.set_title("Silent Neighborhoods: real problems, fewer complaints",
                  loc="left", fontsize=14, fontweight="bold")
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, loc="lower right")
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(path, dpi=200)
