@@ -11,14 +11,19 @@ Joins three things into ONE 59-row table:
      (NYC Housing and Vacancy Survey 2023), so the comparison is fair
   3. 311 complaints for the latest full year - the "live" signal we will
      correct later
+  4. Renter-occupied homes from the Census (ACS 2019-2023), because HPD
+     complaints come from renters
 
-Then converts complaint counts into rates per 1,000 residents.
+Then converts complaint counts into rates per 1,000 residents AND per
+1,000 renter homes (the fair comparison for housing complaints).
 
 Data quirks handled (documented in DOHMH's Metadata sheet):
   * "^" = suppressed (estimate too unreliable to publish) -> stored as missing
   * "*" = interpret with caution -> kept, but flagged in a *_caution column
   * Some districts share one estimate because the source data comes from a
     larger area (e.g. 101 & 102 share poverty and language values)
+  * A few Census PUMAs cover two districts - their renter homes are split
+    between the two in proportion to population
 
 Output: data/clean/district_table.parquet  (+ .csv copy for easy viewing)
         data/clean/district_table_report.json
@@ -38,6 +43,7 @@ RAW_DIR = PROJECT_ROOT / "data" / "raw"
 CLEAN_DIR = PROJECT_ROOT / "data" / "clean"
 CHP_FILE = RAW_DIR / "2026-chp-pud.xlsx"
 YEARLY_311 = CLEAN_DIR / "311_district_yearly.parquet"
+RENTERS_FILE = RAW_DIR / "acs_renters_2023.csv"
 OUT_FILE = CLEAN_DIR / "district_table.parquet"
 
 SURVEY_YEAR = 2023  # year of the Housing and Vacancy Survey in the CHP file
@@ -116,16 +122,47 @@ def prepare_311(yearly: pd.DataFrame, year: int, suffix: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# 2b. Renter homes: split shared PUMAs between their districts
+# ---------------------------------------------------------------------------
+def allocate_renters(renters: pd.DataFrame, chp: pd.DataFrame) -> pd.DataFrame:
+    """
+    One row per district with its renter-occupied homes.
+
+    Most PUMAs match one district. When a PUMA covers two (e.g. "101;102"),
+    its renter homes are split by each district's share of the population:
+    if 101 has 40% of the combined population, it gets 40% of the renters.
+    """
+    pop = chp.set_index("cd_code")["population"]
+    rows = []
+    for _, r in renters.iterrows():
+        codes = [int(c) for c in str(r["cd_codes"]).split(";")]
+        group_pop = sum(pop.get(c, 0) for c in codes)
+        for c in codes:
+            share = pop.get(c, 0) / group_pop if group_pop else 1 / len(codes)
+            rows.append({
+                "cd_code": c,
+                "renter_homes": round(r["renter_homes"] * share),
+                "occupied_homes": round(r["occupied_homes"] * share),
+                "renter_homes_estimated_split": len(codes) > 1,
+            })
+    out = pd.DataFrame(rows)
+    out["pct_renter"] = (out["renter_homes"] / out["occupied_homes"] * 100).round(1)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 3. Join and compute rates
 # ---------------------------------------------------------------------------
-def build_table(chp: pd.DataFrame, yearly: pd.DataFrame,
+def build_table(chp: pd.DataFrame, yearly: pd.DataFrame, renters: pd.DataFrame,
                 survey_year: int = SURVEY_YEAR) -> pd.DataFrame:
     latest = int(yearly.loc[yearly["full_year"], "year"].max())
 
     survey = prepare_311(yearly, survey_year, str(survey_year))
     live = prepare_311(yearly, latest, str(latest)).drop(columns="borough")
 
-    table = (chp.merge(survey, on="cd_code", how="left", validate="1:1")
+    table = (chp.merge(allocate_renters(renters, chp), on="cd_code",
+                       how="left", validate="1:1")
+                .merge(survey, on="cd_code", how="left", validate="1:1")
                 .merge(live, on="cd_code", how="left", validate="1:1"))
 
     # Complaints per 1,000 residents, so big and small districts compare fairly
@@ -133,6 +170,8 @@ def build_table(chp: pd.DataFrame, yearly: pd.DataFrame,
                 "PESTS_MOLD_", "WATER_PLUMBING_", "STRUCTURAL_",
                 "SAFETY_UTILITIES_", "OTHER_"))]:
         table[f"{col}_per_1k"] = (table[col] / table["population"] * 1000).round(2)
+        table[f"{col}_per_1k_renters"] = (
+            table[col] / table["renter_homes"] * 1000).round(2)
 
     table.attrs["latest_full_year"] = latest
     front = ["cd_code", "borough", "district_name", "population"]
@@ -157,6 +196,8 @@ def validate(table: pd.DataFrame, survey_year: int = SURVEY_YEAR) -> dict:
         "percentages_between_0_and_100": bool(pct_ok),
         "every_district_has_311_data":
             bool(table[[f"total_{survey_year}", f"total_{latest}"]].notna().all().all()),
+        "every_district_has_renter_homes":
+            bool((table["renter_homes"].fillna(0) > 0).all()),
     }
     return {
         "rows": len(table),
@@ -164,6 +205,10 @@ def validate(table: pd.DataFrame, survey_year: int = SURVEY_YEAR) -> dict:
         "latest_full_year_311": latest,
         "suppressed_values_by_column": suppressed,
         "housing_survey_interpret_with_caution": caution,
+        "renter_homes_total": int(table["renter_homes"].sum()),
+        "districts_with_estimated_renter_split":
+            table.loc[table["renter_homes_estimated_split"].fillna(False).astype(bool),
+                      "cd_code"].tolist(),
         "checks": checks,
         "passed": all(checks.values()),
     }
@@ -180,30 +225,35 @@ def print_report(report: dict, table: pd.DataFrame) -> None:
             print(f"  {col:<26} {codes}")
     print(f"Housing survey 'interpret with caution' (*): "
           f"{report['housing_survey_interpret_with_caution']}")
+    print(f"Renter homes: {report['renter_homes_total']:,}  "
+          f"(split between two districts: "
+          f"{report['districts_with_estimated_renter_split']})")
     print("\nChecks:")
     for name, ok in report["checks"].items():
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
     print(f"\nOverall: {'PASSED' if report['passed'] else 'NEEDS REVIEW'}")
 
     y = report["survey_year_311"]
-    preview = table.sort_values(f"total_{y}_per_1k", ascending=False)
-    print(f"\nHighest 311 housing complaints per 1,000 residents ({y}):")
-    print(preview[["cd_code", "district_name", f"total_{y}_per_1k",
-                   "pct_homes_with_defects"]].head(5).to_string(index=False))
-    print(f"\nLowest:")
-    print(preview[["cd_code", "district_name", f"total_{y}_per_1k",
-                   "pct_homes_with_defects"]].tail(5).to_string(index=False))
-
+    cols = ["cd_code", "district_name", "pct_renter",
+            f"total_{y}_per_1k_renters", "pct_homes_with_defects"]
+    preview = table.sort_values(f"total_{y}_per_1k_renters", ascending=False)
+    print(f"\nHighest 311 housing complaints per 1,000 RENTER homes ({y}):")
+    print(preview[cols].head(5).to_string(index=False))
+    print("\nLowest:")
+    print(preview[cols].tail(5).to_string(index=False))
 
 if __name__ == "__main__":
     if not CHP_FILE.exists():
         raise SystemExit(f"Missing {CHP_FILE.name} in data/raw/")
     if not YEARLY_311.exists():
         raise SystemExit("Run src/summarize_311.py first.")
+    if not RENTERS_FILE.exists():
+        raise SystemExit("Run src/fetch_acs_renters.py first.")
 
     chp = load_chp(CHP_FILE)
     yearly = pd.read_parquet(YEARLY_311)
-    table = build_table(chp, yearly)
+    renters = pd.read_csv(RENTERS_FILE, dtype={"cd_codes": str})
+    table = build_table(chp, yearly, renters)
     report = validate(table)
     print_report(report, table)
 

@@ -5,7 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from build_district_table import build_table, clean_chp, validate
+from build_district_table import (allocate_renters, build_table, clean_chp,
+                                  validate)
 
 CODES = [b * 100 + n for b, c in {1: 12, 2: 12, 3: 18, 4: 14, 5: 3}.items()
          for n in range(1, c + 1)]
@@ -42,6 +43,17 @@ def make_yearly() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def make_renters() -> pd.DataFrame:
+    """One PUMA per district, except 101 & 102 which share one PUMA."""
+    rows = [{"cd_codes": "101;102", "occupied_homes": 40_000,
+             "renter_homes": 20_000}]
+    for c in CODES:
+        if c not in (101, 102):
+            rows.append({"cd_codes": str(c), "occupied_homes": 40_000,
+                         "renter_homes": 20_000})
+    return pd.DataFrame(rows)
+
+
 def test_keeps_only_59_districts():
     chp = clean_chp(make_chp_raw())
     assert len(chp) == 59
@@ -55,10 +67,24 @@ def test_suppressed_becomes_missing_and_caution_is_flagged():
     assert not chp.loc[101, "pct_homes_with_defects_caution"]
 
 
+def test_shared_puma_is_split_by_population():
+    chp = clean_chp(make_chp_raw())
+    chp.loc[chp["cd_code"] == 101, "population"] = 30_000   # 101: 30%
+    chp.loc[chp["cd_code"] == 102, "population"] = 70_000   # 102: 70%
+    out = allocate_renters(make_renters(), chp).set_index("cd_code")
+    assert out.loc[101, "renter_homes"] == 6_000
+    assert out.loc[102, "renter_homes"] == 14_000
+    assert out.loc[101, "renter_homes_estimated_split"]
+    assert not out.loc[103, "renter_homes_estimated_split"]
+    assert out["renter_homes"].sum() == make_renters()["renter_homes"].sum()
+
+
 def test_rates_per_1k_and_validation():
-    table = build_table(clean_chp(make_chp_raw()), make_yearly())
+    table = build_table(clean_chp(make_chp_raw()), make_yearly(), make_renters())
     # 500 complaints / 100,000 people * 1,000 = 5.0
     assert (table["total_2023_per_1k"] == 5.0).all()
+    # 500 complaints / 20,000 renter homes * 1,000 = 25.0 (unshared PUMAs)
+    assert table.set_index("cd_code").loc[103, "total_2023_per_1k_renters"] == 25.0
     assert "total_2025" in table.columns           # latest full year, not 2026
     report = validate(table)
     assert report["passed"], report["checks"]
@@ -69,7 +95,7 @@ def test_partial_year_is_rejected():
     yearly = make_yearly()
     yearly.loc[yearly["year"] == 2023, "full_year"] = False
     with pytest.raises(ValueError):
-        build_table(clean_chp(make_chp_raw()), yearly)
+        build_table(clean_chp(make_chp_raw()), yearly, make_renters())
 
 
 CHP_FILE = (Path(__file__).resolve().parent.parent
