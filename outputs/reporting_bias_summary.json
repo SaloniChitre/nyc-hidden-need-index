@@ -1,0 +1,74 @@
+{
+  "survey_year": 2023,
+  "silent_ratio_cutoff": 0.8,
+  "median_need_pct": 63.5,
+  "expected_complaints_model": {
+    "n_districts": 58,
+    "r_squared": 0.588,
+    "pct_more_complaints_per_defect_point": 3.76,
+    "p_value": 2.3255298005921094e-12
+  },
+  "silent_neighborhoods": [
+    {
+      "cd_code": 404,
+      "district_name": "Elmhurst and Corona",
+      "reporting_ratio": 0.442
+    },
+    {
+      "cd_code": 103,
+      "district_name": "Lower East Side and Chinatown",
+      "reporting_ratio": 0.487
+    },
+    {
+      "cd_code": 111,
+      "district_name": "East Harlem",
+      "reporting_ratio": 0.619
+    },
+    {
+      "cd_code": 408,
+      "district_name": "Hillcrest and Fresh Meadows",
+      "reporting_ratio": 0.659
+    },
+    {
+      "cd_code": 403,
+      "district_name": "Jackson Heights",
+      "reporting_ratio": 0.674
+    },
+    {
+      "cd_code": 307,
+      "district_name": "Sunset Park",
+      "reporting_ratio": 0.72
+    },
+    {
+      "cd_code": 318,
+      "district_name": "Flatlands and Canarsie",
+      "reporting_ratio": 0.745
+    },
+    {
+      "cd_code": 201,
+      "district_name": "Mott Haven and Melrose",
+      "reporting_ratio": 0.751
+    }
+  ],
+  "who_under_reports": {
+    "n_districts": 58,
+    "r_squared": 0.136,
+    "effects": {
+      "pct_limited_english": {
+        "pct_change_per_sd": -20.4,
+        "p_value": 0.0139,
+        "correlation": -0.101
+      },
+      "pct_foreign_born": {
+        "pct_change_per_sd": 12.7,
+        "p_value": 0.1374,
+        "correlation": 0.032
+      },
+      "pct_poverty": {
+        "pct_change_per_sd": 17.9,
+        "p_value": 0.0133,
+        "correlation": 0.142
+      }
+    }
+  }
+}
