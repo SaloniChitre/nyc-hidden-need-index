@@ -1,0 +1,91 @@
+{
+  "top_n": 10,
+  "entered_top_n_after_correction": [
+    {
+      "cd_code": 201,
+      "district_name": "Mott Haven and Melrose",
+      "rank_raw": 14,
+      "rank_corrected": 5
+    },
+    {
+      "cd_code": 309,
+      "district_name": "South Crown Heights and Lefferts Gardens",
+      "rank_raw": 11,
+      "rank_corrected": 8
+    },
+    {
+      "cd_code": 414,
+      "district_name": "Rockaway and Broad Channel",
+      "rank_raw": 13,
+      "rank_corrected": 10
+    }
+  ],
+  "left_top_n_after_correction": [
+    {
+      "cd_code": 212,
+      "district_name": "Williamsbridge and Baychester",
+      "rank_raw": 8,
+      "rank_corrected": 12
+    },
+    {
+      "cd_code": 207,
+      "district_name": "Kingsbridge Heights and Bedford",
+      "rank_raw": 10,
+      "rank_corrected": 13
+    },
+    {
+      "cd_code": 110,
+      "district_name": "Central Harlem",
+      "rank_raw": 7,
+      "rank_corrected": 15
+    }
+  ],
+  "biggest_climbers": [
+    {
+      "cd_code": 404,
+      "district_name": "Elmhurst and Corona",
+      "rank_raw": 44,
+      "rank_corrected": 25
+    },
+    {
+      "cd_code": 103,
+      "district_name": "Lower East Side and Chinatown",
+      "rank_raw": 40,
+      "rank_corrected": 28
+    },
+    {
+      "cd_code": 306,
+      "district_name": "Park Slope and Carroll Gardens",
+      "rank_raw": 46,
+      "rank_corrected": 33
+    },
+    {
+      "cd_code": 407,
+      "district_name": "Flushing and Whitestone",
+      "rank_raw": 49,
+      "rank_corrected": 38
+    },
+    {
+      "cd_code": 301,
+      "district_name": "Greenpoint and Williamsburg",
+      "rank_raw": 54,
+      "rank_corrected": 43
+    }
+  ],
+  "top_n_corrected": [
+    "Morrisania and Crotona",
+    "East Harlem",
+    "Brownsville",
+    "Belmont and East Tremont",
+    "Mott Haven and Melrose",
+    "Hunts Point and Longwood",
+    "Fordham and University Heights",
+    "South Crown Heights and Lefferts Gardens",
+    "Highbridge and Concourse",
+    "Rockaway and Broad Channel"
+  ],
+  "districts_without_ratio": [
+    503
+  ],
+  "live_year": 2025
+}
